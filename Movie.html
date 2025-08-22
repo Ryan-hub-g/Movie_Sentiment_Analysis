@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Review Sentiment Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'movie-primary': '#4a6baf',
+                        'movie-success': '#2ecc71',
+                        'movie-danger': '#e74c3c',
+                        'movie-warning': '#f39c12',
+                        'movie-dark': '#2c3e50',
+                        'movie-highlight': '#3498db'
+                    },
+                    animation: {
+                        'bounce-gentle': 'bounceGentle 0.3s ease-in-out',
+                        'flash': 'flash 0.6s ease-in-out'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes bounceGentle {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        @keyframes flash {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(52, 152, 219, 0.4); }
+        }
+        .perforation::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background-image: radial-gradient(circle at 15px 5px, transparent 3px, #ccc 3px);
+            background-size: 15px 10px;
+            background-repeat: repeat-x;
+        }
+        .film-strip {
+            background: linear-gradient(90deg, #000 0px, #000 5px, transparent 5px, transparent 10px);
+            background-size: 10px 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Header -->
+    <div class="bg-movie-dark text-white p-4 m-4 rounded-lg shadow-lg">
+        <div class="flex items-center">
+            <span class="text-4xl mr-4">🎥</span>
+            <h1 class="text-2xl font-bold">Movie Review Sentiment Analyzer</h1>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="max-w-6xl mx-auto p-4 space-y-6">
+        <!-- Input Section -->
+        <div class="bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 px-4 py-2 border-b">
+                <h2 class="text-lg font-semibold text-movie-dark">📝 Enter Movie Review</h2>
+            </div>
+            <div class="film-strip p-1">
+                <textarea 
+                    id="reviewInput" 
+                    class="w-full h-40 p-4 border-none resize-none focus:outline-none focus:ring-2 focus:ring-movie-primary rounded"
+                    placeholder="Paste your movie review here and discover its sentiment..."
+                ></textarea>
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex flex-wrap gap-4">
+            <button 
+                onclick="analyzeReview()" 
+                class="bg-movie-primary hover:bg-movie-highlight text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg transform hover:-translate-y-1"
+            >
+                🔍 Analyze Review
+            </button>
+            <button 
+                onclick="clearInput()" 
+                class="bg-movie-dark hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg"
+            >
+                🧹 Clear
+            </button>
+            <button 
+                onclick="showAccuracyResults()" 
+                class="bg-movie-warning hover:bg-orange-500 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg"
+            >
+                🎯 Test Accuracy
+            </button>
+            <button 
+                onclick="showCrossValidationResults()" 
+                class="bg-movie-success hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-lg"
+            >
+                📊 Cross Validation
+            </button>
+        </div>
+
+        <!-- Results Card -->
+        <div id="resultCard" class="bg-white rounded-lg shadow-lg border border-gray-200 relative perforation">
+            <div class="p-8 text-center">
+                <div id="sentimentIcon" class="text-6xl mb-4 transition-all duration-300">🎬</div>
+                <div id="sentimentLabel" class="text-3xl font-bold text-gray-600 mb-2">Movie Review Sentiment</div>
+                <div id="detailsLabel" class="text-gray-500 mb-6">Paste a movie review and click 'Analyze'</div>
+                
+                <!-- Rating Meter -->
+                <div class="max-w-md mx-auto">
+                    <div class="flex justify-between text-sm text-gray-500 mb-2">
+                        <span>⭐</span>
+                        <span>⭐⭐</span>
+                        <span>⭐⭐⭐</span>
+                        <span>⭐⭐⭐⭐</span>
+                        <span>⭐⭐⭐⭐⭐</span>
+                    </div>
+                    <div class="relative">
+                        <div id="ratingBackground" class="h-6 bg-gray-200 rounded-full"></div>
+                        <div id="ratingFill" class="absolute top-0 left-0 h-6 rounded-full transition-all duration-500" style="width: 50%; background-color: #f39c12;"></div>
+                        <div id="ratingText" class="absolute inset-0 flex items-center justify-center text-white font-bold text-sm">2.5</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="bg-movie-dark text-white p-3 rounded-lg">
+            <span id="statusText">Ready | Current Model Accuracy: Calculating...</span>
+        </div>
+    </div>
+
+    <!-- Modal for Results -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div id="modalHeader" class="bg-movie-primary text-white p-4">
+                <h3 id="modalTitle" class="text-xl font-bold">Results</h3>
+            </div>
+            <div class="p-6 max-h-96 overflow-y-auto">
+                <div id="modalContent"></div>
+            </div>
+            <div class="border-t p-4 text-right">
+                <button onclick="closeModal()" class="bg-movie-primary text-white px-6 py-2 rounded-lg hover:bg-movie-highlight">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test datasets for accuracy measurement
+        const testReviews = [
+            ["This movie was absolutely fantastic! Amazing acting and plot.", "Positive"],
+            ["Worst movie I've ever seen. Complete waste of time.", "Negative"],
+            ["The movie was okay, nothing special but watchable.", "Neutral"],
+            ["Brilliant cinematography and outstanding performances!", "Positive"],
+            ["Boring and predictable. I fell asleep halfway through.", "Negative"],
+            ["The movie has good moments but overall average.", "Neutral"],
+            ["Incredible storytelling and amazing special effects!", "Positive"],
+            ["Terrible acting and awful script. Avoid at all costs.", "Negative"],
+            ["It's an average film with some good parts.", "Neutral"],
+            ["Masterpiece! One of the best movies ever made.", "Positive"]
+        ];
+
+        const extendedTestReviews = [
+            // Positive reviews
+            ["This movie exceeded all my expectations! Brilliant storytelling.", "Positive"],
+            ["Outstanding performances and incredible cinematography!", "Positive"],
+            ["A masterpiece of modern cinema. Highly recommended!", "Positive"],
+            ["Fantastic plot twists and amazing character development.", "Positive"],
+            ["Best movie I've seen this year. Absolutely loved it!", "Positive"],
+            ["Incredible acting and beautiful visuals throughout.", "Positive"],
+            ["Perfect blend of action, drama, and humor.", "Positive"],
+            ["This film is a work of art. Stunning in every way.", "Positive"],
+            ["Brilliant direction and excellent script writing.", "Positive"],
+            ["Amazing soundtrack and breathtaking scenes!", "Positive"],
+            
+            // Negative reviews
+            ["Terrible movie with poor acting and weak plot.", "Negative"],
+            ["Worst film I've ever watched. Complete waste of time.", "Negative"],
+            ["Boring, predictable, and badly executed.", "Negative"],
+            ["The plot makes no sense and the acting is awful.", "Negative"],
+            ["I want my money back. This movie is horrible.", "Negative"],
+            ["Poor direction and terrible script. Avoid this movie.", "Negative"],
+            ["Completely disappointing. Nothing good about it.", "Negative"],
+            ["Bad acting, bad story, bad everything.", "Negative"],
+            ["This movie is painfully boring and poorly made.", "Negative"],
+            ["Awful film with no redeeming qualities.", "Negative"],
+            
+            // Neutral reviews
+            ["The movie was okay, nothing special but watchable.", "Neutral"],
+            ["Average film with some good moments and some bad.", "Neutral"],
+            ["It's an alright movie, not great but not terrible.", "Neutral"],
+            ["The movie has its ups and downs. Mixed feelings.", "Neutral"],
+            ["Decent acting but the plot could have been better.", "Neutral"],
+            ["It's watchable but forgettable. Average at best.", "Neutral"],
+            ["Some parts were good, others not so much.", "Neutral"],
+            ["The movie is fine, nothing to write home about.", "Neutral"],
+            ["It's an okay film with moderate entertainment value.", "Neutral"],
+            ["Average movie that doesn't stand out either way.", "Neutral"]
+        ];
+
+        // Simplified sentiment analysis (mimicking TextBlob)
+        function analyzeSentiment(text) {
+            const positiveWords = ['amazing', 'fantastic', 'brilliant', 'outstanding', 'incredible', 'masterpiece', 'excellent', 'wonderful', 'perfect', 'beautiful', 'stunning', 'great', 'good', 'love', 'loved', 'best', 'awesome', 'superb', 'magnificent', 'extraordinary', 'phenomenal', 'spectacular', 'marvelous', 'terrific', 'delightful', 'impressive', 'remarkable', 'exceptional'];
+            
+            const negativeWords = ['terrible', 'awful', 'horrible', 'worst', 'boring', 'bad', 'poor', 'disappointing', 'waste', 'hate', 'hated', 'disgusting', 'pathetic', 'useless', 'stupid', 'dumb', 'ridiculous', 'annoying', 'frustrating', 'painful', 'unbearable', 'atrocious', 'abysmal', 'appalling', 'dreadful'];
+
+            const words = text.toLowerCase().split(/\W+/);
+            let positiveScore = 0;
+            let negativeScore = 0;
+
+            words.forEach(word => {
+                if (positiveWords.includes(word)) positiveScore++;
+                if (negativeWords.includes(word)) negativeScore++;
+            });
+
+            // Calculate polarity (-1 to 1)
+            const totalWords = words.length;
+            const netScore = positiveScore - negativeScore;
+            const polarity = totalWords > 0 ? netScore / totalWords : 0;
+            
+            // Normalize to -1 to 1 range
+            const normalizedPolarity = Math.max(-1, Math.min(1, polarity * 2));
+            
+            // Calculate subjectivity (0 to 1)
+            const subjectiveWords = positiveScore + negativeScore;
+            const subjectivity = totalWords > 0 ? subjectiveWords / totalWords : 0;
+
+            return { polarity: normalizedPolarity, subjectivity: Math.min(1, subjectivity * 3) };
+        }
+
+        function getSentimentFromPolarity(polarity) {
+            if (polarity > 0.3) return "Positive";
+            if (polarity < -0.1) return "Negative";
+            return "Neutral";
+        }
+
+        function getSentimentColor(sentiment) {
+            const colors = {
+                "Positive": "#2ecc71",
+                "Negative": "#e74c3c",
+                "Neutral": "#f39c12"
+            };
+            return colors[sentiment] || "#f39c12";
+        }
+
+        function getSentimentIcon(sentiment) {
+            const icons = {
+                "Positive": "🍿",
+                "Negative": "👎",
+                "Neutral": "🎬"
+            };
+            return icons[sentiment] || "🎬";
+        }
+
+        function updateRatingMeter(polarity) {
+            const starRating = ((polarity + 1) / 2) * 4 + 1; // Scale to 1-5
+            const percentage = (starRating / 5) * 100;
+            
+            const ratingFill = document.getElementById('ratingFill');
+            const ratingText = document.getElementById('ratingText');
+            
+            let color;
+            if (starRating < 2) color = '#e74c3c';
+            else if (starRating < 3.5) color = '#f39c12';
+            else color = '#2ecc71';
+            
+            ratingFill.style.width = percentage + '%';
+            ratingFill.style.backgroundColor = color;
+            ratingText.textContent = starRating.toFixed(1);
+        }
+
+        function animateResult(color) {
+            const resultCard = document.getElementById('resultCard');
+            const icon = document.getElementById('sentimentIcon');
+            
+            resultCard.style.animation = 'flash 0.6s ease-in-out';
+            icon.style.animation = 'bounce-gentle 0.3s ease-in-out';
+            
+            setTimeout(() => {
+                resultCard.style.animation = '';
+                icon.style.animation = '';
+            }, 600);
+        }
+
+        function analyzeReview() {
+            const reviewText = document.getElementById('reviewInput').value.trim();
+            if (!reviewText) {
+                alert('Please enter a movie review to analyze.');
+                return;
+            }
+
+            document.getElementById('statusText').textContent = 'Analyzing movie review...';
+
+            try {
+                // Analyze sentiment
+                const sentiment = analyzeSentiment(reviewText);
+                const polarity = sentiment.polarity;
+                const subjectivity = sentiment.subjectivity;
+
+                const sentimentLabel = getSentimentFromPolarity(polarity);
+                const color = getSentimentColor(sentimentLabel);
+                const icon = getSentimentIcon(sentimentLabel);
+
+                let feedback;
+                if (sentimentLabel === "Positive") feedback = "This review LOVED the movie!";
+                else if (sentimentLabel === "Negative") feedback = "This review HATED the movie.";
+                else feedback = "This review was MIXED about the movie.";
+
+                // Update UI
+                document.getElementById('sentimentIcon').textContent = icon;
+                document.getElementById('sentimentLabel').textContent = sentimentLabel;
+                document.getElementById('sentimentLabel').style.color = color;
+
+                const details = [
+                    feedback,
+                    "",
+                    `Rating score: ${(((polarity + 1) / 2 * 4 + 1)).toFixed(1)}/5`,
+                    `Emotional intensity: ${(Math.abs(polarity) * 100).toFixed(0)}%`,
+                    `Subjectivity: ${subjectivity > 0.5 ? 'Subjective' : 'Objective'}`
+                ].join('\n');
+
+                document.getElementById('detailsLabel').textContent = details;
+                updateRatingMeter(polarity);
+                animateResult(color);
+                updateLiveAccuracy();
+
+            } catch (error) {
+                alert('Failed to analyze review: ' + error.message);
+                document.getElementById('statusText').textContent = 'Error occurred during analysis';
+            }
+        }
+
+        function clearInput() {
+            document.getElementById('reviewInput').value = '';
+            document.getElementById('sentimentIcon').textContent = '🎬';
+            document.getElementById('sentimentLabel').textContent = 'Movie Review Sentiment';
+            document.getElementById('sentimentLabel').style.color = '#6b7280';
+            document.getElementById('detailsLabel').textContent = "Paste a movie review and click 'Analyze'";
+            updateRatingMeter(0);
+            updateLiveAccuracy();
+        }
+
+        function testAccuracy() {
+            let correctPredictions = 0;
+            const totalPredictions = testReviews.length;
+            const results = [];
+
+            testReviews.forEach(([reviewText, actualSentiment]) => {
+                const sentiment = analyzeSentiment(reviewText);
+                const polarity = sentiment.polarity;
+                const predictedSentiment = getSentimentFromPolarity(polarity);
+                const isCorrect = predictedSentiment === actualSentiment;
+                
+                if (isCorrect) correctPredictions++;
+                
+                results.push({
+                    review: reviewText.length > 50 ? reviewText.substring(0, 50) + "..." : reviewText,
+                    actual: actualSentiment,
+                    predicted: predictedSentiment,
+                    correct: isCorrect,
+                    polarity: polarity
+                });
+            });
+
+            const accuracy = (correctPredictions / totalPredictions) * 100;
+            return { accuracy, results, correct: correctPredictions, total: totalPredictions };
+        }
+
+        function updateLiveAccuracy() {
+            try {
+                const { accuracy, correct, total } = testAccuracy();
+                document.getElementById('statusText').textContent = 
+                    `Ready | Current Model Accuracy: ${accuracy.toFixed(1)}% (${correct}/${total})`;
+            } catch (error) {
+                document.getElementById('statusText').textContent = 'Ready to analyze movie reviews';
+            }
+        }
+
+        function showModal(title, content) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalContent').innerHTML = content;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        function showAccuracyResults() {
+            try {
+                const { accuracy, results, correct, total } = testAccuracy();
+                
+                let content = `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Overall Results</h4>
+                            <p><strong>Accuracy:</strong> ${accuracy.toFixed(1)}%</p>
+                            <p><strong>Correct Predictions:</strong> ${correct}</p>
+                            <p><strong>Total Test Cases:</strong> ${total}</p>
+                            <p><strong>Incorrect Predictions:</strong> ${total - correct}</p>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Performance Rating</h4>
+                            <p class="text-lg">
+                                ${accuracy >= 80 ? 'Excellent! 🌟' : 
+                                  accuracy >= 70 ? 'Good Performance ✅' : 
+                                  accuracy >= 60 ? 'Fair Performance ⚠️' : 'Needs Improvement ❌'}
+                            </p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-lg mb-2">Detailed Results</h4>
+                            <div class="space-y-2 max-h-64 overflow-y-auto">
+                `;
+                
+                results.forEach((result, i) => {
+                    const statusIcon = result.correct ? '✅' : '❌';
+                    content += `
+                        <div class="border p-2 rounded ${result.correct ? 'bg-green-50' : 'bg-red-50'}">
+                            <p><strong>${statusIcon} Test ${i + 1}:</strong> ${result.review}</p>
+                            <p><strong>Expected:</strong> ${result.actual} | <strong>Got:</strong> ${result.predicted}</p>
+                            <p><strong>Polarity Score:</strong> ${result.polarity.toFixed(3)}</p>
+                        </div>
+                    `;
+                });
+                
+                content += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                showModal(`🎯 Accuracy Test Results: ${accuracy.toFixed(1)}% (${correct}/${total})`, content);
+                
+            } catch (error) {
+                alert('Failed to calculate accuracy: ' + error.message);
+            }
+        }
+
+        function crossValidateAccuracy(kFolds = 5) {
+            const reviews = [...extendedTestReviews];
+            // Shuffle array
+            for (let i = reviews.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [reviews[i], reviews[j]] = [reviews[j], reviews[i]];
+            }
+
+            const foldSize = Math.floor(reviews.length / kFolds);
+            const folds = [];
+            
+            for (let i = 0; i < kFolds; i++) {
+                const start = i * foldSize;
+                const end = i < kFolds - 1 ? start + foldSize : reviews.length;
+                folds.push(reviews.slice(start, end));
+            }
+
+            const foldAccuracies = [];
+            const detailedResults = [];
+
+            folds.forEach((testFold, foldNum) => {
+                let correct = 0;
+                const total = testFold.length;
+                const foldResults = [];
+
+                testFold.forEach(([reviewText, actualSentiment]) => {
+                    const sentiment = analyzeSentiment(reviewText);
+                    const polarity = sentiment.polarity;
+                    const predictedSentiment = getSentimentFromPolarity(polarity);
+                    const isCorrect = predictedSentiment === actualSentiment;
+
+                    if (isCorrect) correct++;
+
+                    foldResults.push({
+                        review: reviewText,
+                        actual: actualSentiment,
+                        predicted: predictedSentiment,
+                        correct: isCorrect,
+                        polarity: polarity
+                    });
+                });
+
+                const foldAccuracy = (correct / total) * 100;
+                foldAccuracies.push(foldAccuracy);
+                detailedResults.push({
+                    fold: foldNum + 1,
+                    accuracy: foldAccuracy,
+                    correct: correct,
+                    total: total,
+                    results: foldResults
+                });
+            });
+
+            const meanAccuracy = foldAccuracies.reduce((a, b) => a + b, 0) / foldAccuracies.length;
+            const stdAccuracy = Math.sqrt(
+                foldAccuracies.reduce((sum, acc) => sum + Math.pow(acc - meanAccuracy, 2), 0) / foldAccuracies.length
+            );
+
+            return { meanAccuracy, stdAccuracy, foldAccuracies, detailedResults };
+        }
+
+        function showCrossValidationResults() {
+            try {
+                const { meanAccuracy, stdAccuracy, foldAccuracies, detailedResults } = crossValidateAccuracy();
+                
+                let content = `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Cross-Validation Summary</h4>
+                            <p><strong>Mean Accuracy:</strong> ${meanAccuracy.toFixed(2)}% ± ${stdAccuracy.toFixed(2)}%</p>
+                            <p><strong>Number of Folds:</strong> 5</p>
+                            <p><strong>Total Reviews Tested:</strong> ${detailedResults.reduce((sum, d) => sum + d.total, 0)}</p>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Fold-by-Fold Results</h4>
+                            <div class="grid grid-cols-5 gap-2">
+                `;
+                
+                foldAccuracies.forEach((acc, i) => {
+                    content += `
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="font-semibold">Fold ${i + 1}</div>
+                            <div class="text-sm">${acc.toFixed(1)}%</div>
+                        </div>
+                    `;
+                });
+                
+                content += `
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Performance Metrics</h4>
+                            <p><strong>Best Fold:</strong> ${Math.max(...foldAccuracies).toFixed(2)}%</p>
+                            <p><strong>Worst Fold:</strong> ${Math.min(...foldAccuracies).toFixed(2)}%</p>
+                            <p><strong>Consistency (Std Dev):</strong> ${stdAccuracy.toFixed(2)}%</p>
+                            <div class="mt-2">
+                                <strong>Interpretation:</strong>
+                                <span class="ml-2">
+                                    ${stdAccuracy < 5 ? '✅ Model shows consistent performance across folds' :
+                                      stdAccuracy < 10 ? '⚠️ Model shows moderate variance across folds' :
+                                      '❌ Model shows high variance - may need improvement'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                showModal(`📊 Cross-Validation Results (5-Fold)`, content);
+                
+            } catch (error) {
+                alert('Failed to perform cross-validation: ' + error.message);
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            updateLiveAccuracy();
+            
+            // Close modal when clicking outside
+            document.getElementById('modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
